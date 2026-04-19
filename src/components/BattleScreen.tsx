@@ -46,6 +46,8 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
   const [isInvalidDeck, setIsInvalidDeck] = useState(false);
   const [showInvalidFeedback, setShowInvalidFeedback] = useState(false);
 
+  const [victoryLoot, setVictoryLoot] = useState<{ gold: number, playerHp: number } | null>(null);
+
   // AI logic helper to generate next intent
   const generateEnemyIntent = (turn: number) => {
     if (turn % 5 === 0) {
@@ -95,6 +97,9 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
 
     const initialIntent = generateEnemyIntent(1);
     
+    const currentRedraws = 2; // baseRedraws
+    const bonusRedrawsNextTurn = 0;
+
     setBattle({
       enemy: { 
         ...enemyData, 
@@ -104,14 +109,16 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       },
       playerHp: Math.max(startHp, 1),
       hand,
-      redrawCount: 2,
+      drawPile: initialDeck.slice(cardsToDraw),
+      discardPile: [],
+      currentRedraws,
+      bonusRedrawsNextTurn,
       armor: 0,
       turn: 1,
       comboPreview: null,
       selectedCardIds: [],
       mechanism,
       consecutivePairs: 0,
-      firstRedrawFreeUsed: false,
       firstStraightUsed: false
     });
     
@@ -266,9 +273,11 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
     if (!card) return;
 
     if (!card.isPinned) {
-      const pinnedCount = battle.hand.filter(c => c.isPinned).length;
-      if (pinnedCount >= 2) {
-        addNotification("普通牌固定已达上限");
+      const isSpecial = card.suite === 'Special';
+      const pinnedSameTypeCount = battle.hand.filter(c => c.isPinned && (isSpecial ? c.suite === 'Special' : c.suite !== 'Special')).length;
+      
+      if (pinnedSameTypeCount >= 2) {
+        addNotification(isSpecial ? "特殊牌固定已达上限" : "普通牌固定已达上限");
         return;
       }
     }
@@ -293,37 +302,37 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
     }, 500);
   };
 
+
+
   const handleRedraw = () => {
-    if (!battle || battle.selectedCardIds.length === 0) return;
+    if (!battle || battle.currentRedraws <= 0 || battle.selectedCardIds.length === 0) return;
 
-    // Relic effect: Shuffler (First redraw free)
-    const isFree = run.relics.includes('shuffler') && !battle.firstRedrawFreeUsed;
-    if (!isFree && battle.redrawCount <= 0) return;
+    // Filter out pinned cards from selection
+    const validSelectionIndices = battle.hand.reduce((acc: number[], c, i) => {
+      if (battle.selectedCardIds.includes(c.id) && !c.isPinned) {
+        acc.push(i);
+      }
+      return acc;
+    }, []);
 
-    // Filter out pinned cards from selection (just in case UI allowed it)
-    const validSelection = battle.selectedCardIds.filter(id => {
-      const card = battle.hand.find(c => c.id === id);
-      return card && !card.isPinned;
-    });
+    if (validSelectionIndices.length === 0) return;
 
-    if (validSelection.length === 0) return;
-
+    const cardsToDiscard = validSelectionIndices.map(i => battle.hand[i]);
     let currentDrawPile = [...battle.drawPile];
-    let currentDiscardPile = [...battle.discardPile, ...battle.hand.filter(c => validSelection.includes(c.id))];
+    let currentDiscardPile = [...battle.discardPile, ...cardsToDiscard];
 
-    if (currentDrawPile.length < validSelection.length) {
+    // Reshuffle if needed
+    if (currentDrawPile.length < validSelectionIndices.length) {
       currentDrawPile = shuffle([...currentDrawPile, ...currentDiscardPile]);
       currentDiscardPile = [];
     }
 
-    const newCards = currentDrawPile.slice(0, validSelection.length);
-    const updatedDrawPile = currentDrawPile.slice(validSelection.length);
+    const newCards = currentDrawPile.slice(0, validSelectionIndices.length);
+    const updatedDrawPile = currentDrawPile.slice(validSelectionIndices.length);
 
-    const newHand = battle.hand.map(c => {
-       if (validSelection.includes(c.id)) {
-         return newCards.shift()!;
-       }
-       return c;
+    const newHand = [...battle.hand];
+    validSelectionIndices.forEach((handIdx, i) => {
+      newHand[handIdx] = newCards[i];
     });
 
     setBattle(prev => prev ? ({
@@ -331,16 +340,15 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       hand: newHand,
       drawPile: updatedDrawPile,
       discardPile: currentDiscardPile,
-      redrawCount: isFree ? prev.redrawCount : prev.redrawCount - 1,
-      firstRedrawFreeUsed: isFree || prev.firstRedrawFreeUsed,
+      currentRedraws: prev.currentRedraws - 1,
       selectedCardIds: [],
       comboPreview: null
     }) : null);
 
-    addLog(isFree ? "免费重抽!" : `重抽! 替换了 ${validSelection.length} 张牌.`);
+    addLog(`重抽! 消耗1次机会，替换了 ${validSelectionIndices.length} 张牌.`);
   };
 
-  const executeEnemyTurn = (currentBattle: BattleState, extraTidy: number, consecutivePairs: number, playedStraight: boolean) => {
+  const executeEnemyTurn = (currentBattle: BattleState, consecutivePairs: number, playedStraight: boolean, nextTurnBonusRedraws: number) => {
     const { type, value, description } = currentBattle.enemy.intent;
     let actualDamageDealt = 0;
     let enemyHeal = 0;
@@ -409,6 +417,10 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
 
     const nextTurn = currentBattle.turn + 1;
     const nextIntent = generateEnemyIntent(nextTurn);
+    
+    // Mulligan Reset Logic
+    const baseRedraws = 2;
+    const nextTurnRedraws = baseRedraws + nextTurnBonusRedraws;
 
     setBattle(prev => prev ? ({
       ...prev,
@@ -417,8 +429,8 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       armor: playerArmorAfterTurn, // Armor persists and stacks
       hand: nextHand,
       turn: nextTurn,
-      redrawCount: 2 + extraTidy,
-      firstRedrawFreeUsed: false,
+      currentRedraws: nextTurnRedraws,
+      bonusRedrawsNextTurn: 0, // Cleared after reset
       firstStraightUsed: prev.firstStraightUsed || playedStraight,
       consecutivePairs,
       selectedCardIds: [],
@@ -497,10 +509,10 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       const count = effectCounts['GainExtraTidy'];
       if (count === 1) {
         specialLabels.push("增加重抽");
-        extraTidy += 1;
+        extraTidy += 1; // Used as bonusRedrawsNextTurn
       } else if (count >= 2) {
         specialLabels.push("重抽增强");
-        extraTidy += 3;
+        extraTidy += 2;
       }
     }
 
@@ -614,7 +626,7 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
         enemy: { ...battle.enemy, armor: newEnemyArmor }
       };
       setBattle(updatedBattleDodged);
-      setTimeout(() => executeEnemyTurn(updatedBattleDodged, extraTidy, consecutivePairs, type === 'Straight'), 1000);
+      setTimeout(() => executeEnemyTurn(updatedBattleDodged, consecutivePairs, type === 'Straight', extraTidy), 1000);
       return;
     }
 
@@ -629,8 +641,14 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       const lootBase = 10 + Math.floor(Math.random() * 10);
       // Gambler Coin: extra 8 gold
       const bonusGold = run.relics.includes('gambler_coin') ? 8 : 0;
+      const totalGold = lootBase + bonusGold;
+      
       setBattle(prev => prev ? ({ ...prev, enemy: { ...prev.enemy, hp: 0, armor: 0 }, playerHp: newPlayerHp }) : null);
-      setTimeout(() => onVictory({ gold: lootBase + bonusGold }, newPlayerHp), 1000);
+      
+      // Delay before showing challenge success
+      setTimeout(() => {
+        setVictoryLoot({ gold: totalGold, playerHp: newPlayerHp });
+      }, 800);
       return;
     }
 
@@ -644,7 +662,7 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
     setBattle(updatedBattle);
     
     // Wait briefly then enemy attacks
-    setTimeout(() => executeEnemyTurn(updatedBattle, extraTidy, consecutivePairs, type === 'Straight'), 1000);
+    setTimeout(() => executeEnemyTurn(updatedBattle, consecutivePairs, type === 'Straight', extraTidy), 1000);
   };
 
   const [isPaused, setIsPaused] = useState(false);
@@ -652,7 +670,51 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
   if (!battle) return <div className="flex items-center justify-center h-full bg-bg-deep text-text-dim uppercase tracking-widest text-xs">Loading Battlefield...</div>;
 
   return (
-    <div className="relative w-full h-full bg-bg-deep overflow-hidden font-sans flex flex-col">
+    <div className="relative w-[1920px] h-[1080px] bg-bg-deep overflow-hidden font-sans flex flex-col">
+      {/* Victory Overlay */}
+      <AnimatePresence>
+        {victoryLoot && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[200] bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center cursor-pointer"
+            onClick={() => {
+              onVictory({ gold: victoryLoot.gold }, victoryLoot.playerHp);
+              setVictoryLoot(null);
+            }}
+          >
+             <motion.div
+               initial={{ scale: 0.5, y: 50, opacity: 0 }}
+               animate={{ scale: 1, y: 0, opacity: 1 }}
+               className="text-center pointer-events-none"
+               style={{ gap: '48px', display: 'flex', flexDirection: 'column' }}
+             >
+                <div style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
+                  <h2 className="text-accent-gold font-mono uppercase opacity-60" style={{ fontSize: '24px', letterSpacing: '15px' }}>Victory Confirmed</h2>
+                  <h1 className="font-serif font-black italic tracking-tighter text-text-main leading-tight drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]" style={{ fontSize: '120px' }}>
+                    挑战成功
+                  </h1>
+                  <p className="text-white/40 font-mono animate-pulse" style={{ fontSize: '14px', letterSpacing: '4px', marginTop: '16px' }}>
+                    CLICK ANYWHERE TO CONTINUE
+                  </p>
+                </div>
+                
+                <div className="bg-white/5 border-y border-white/10" style={{ padding: '32px 96px' }}>
+                  <div className="flex items-center justify-center" style={{ gap: '24px' }}>
+                    <div className="rounded-full bg-accent-gold/20 flex items-center justify-center" style={{ width: '48px', height: '48px' }}>
+                       <div className="rounded-full bg-accent-gold shadow-[0_0_15px_#c5a059]" style={{ width: '16px', height: '16px' }} />
+                    </div>
+                    <span className="text-accent-gold font-serif italic font-bold" style={{ fontSize: '48px' }}>
+                       +{victoryLoot.gold} GOLD ACQUIRED
+                    </span>
+                  </div>
+                </div>
+             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Pause Menu Overlay */}
       <AnimatePresence>
         {isPaused && (
@@ -660,35 +722,37 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-8"
+            className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center"
           >
-            <div className="max-w-md w-full space-y-6 md:space-y-8 bg-card-bg border border-border-color p-8 md:p-12 rounded-xl shadow-2xl">
-               <div className="text-center space-y-2">
-                  <h2 className="text-accent-gold font-mono text-[10px] tracking-widest uppercase">Combat Paused</h2>
-                  <h1 className="text-2xl md:text-4xl font-serif font-black italic tracking-tighter text-text-main">THE EXECUTIONER WAITS</h1>
+            <div className="bg-card-bg border border-border-color shadow-2xl" style={{ width: '600px', padding: '60px', gap: '40px', display: 'flex', flexDirection: 'column' }}>
+               <div className="text-center" style={{ gap: '8px', display: 'flex', flexDirection: 'column' }}>
+                  <h2 className="text-accent-gold font-mono uppercase" style={{ fontSize: '10px', letterSpacing: '10px' }}>Combat Paused</h2>
+                  <h1 className="font-serif font-black italic tracking-tighter text-text-main" style={{ fontSize: '48px' }}>THE EXECUTIONER WAITS</h1>
                </div>
 
-               <div className="space-y-4">
-                  <div className="flex justify-between p-3 md:p-4 bg-black/40 rounded-lg border border-white/5">
-                     <span className="text-text-dim text-xs md:text-sm uppercase">Progress</span>
-                     <span className="text-text-main font-mono">{run.currentNode} / 10</span>
+               <div style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
+                  <div className="flex justify-between bg-black/40 border border-white/5" style={{ padding: '20px' }}>
+                     <span className="text-text-dim uppercase" style={{ fontSize: '14px' }}>Progress</span>
+                     <span className="text-text-main font-mono" style={{ fontSize: '14px' }}>{run.currentNode} / 10</span>
                   </div>
-                  <div className="flex justify-between p-3 md:p-4 bg-black/40 rounded-lg border border-white/5">
-                     <span className="text-text-dim text-xs md:text-sm uppercase">Gold</span>
-                     <span className="text-accent-gold font-mono">{run.gold} G</span>
+                  <div className="flex justify-between bg-black/40 border border-white/5" style={{ padding: '20px' }}>
+                     <span className="text-text-dim uppercase" style={{ fontSize: '14px' }}>Gold</span>
+                     <span className="text-accent-gold font-mono" style={{ fontSize: '14px' }}>{run.gold} G</span>
                   </div>
                </div>
 
-               <div className="flex flex-col gap-3 md:gap-4">
+               <div className="flex flex-col" style={{ gap: '16px' }}>
                   <button 
                     onClick={() => setIsPaused(false)}
-                    className="w-full bg-accent-gold text-black font-black py-4 rounded hover:bg-white transition-colors uppercase tracking-widest text-xs md:text-sm"
+                    className="w-full bg-accent-gold text-black font-black uppercase tracking-widest hover:bg-white transition-colors"
+                    style={{ fontSize: '14px', height: '60px' }}
                   >
                      CONTINUE
                   </button>
                   <button 
                     onClick={onDefeat}
-                    className="w-full bg-transparent text-accent-red border border-accent-red/30 py-4 rounded hover:bg-accent-red/10 transition-all font-bold uppercase tracking-widest text-xs md:text-sm"
+                    className="w-full bg-transparent text-accent-red border border-accent-red/30 transition-all font-bold uppercase tracking-widest"
+                    style={{ fontSize: '14px', height: '60px' }}
                   >
                      ABANDON RUN
                   </button>
@@ -699,29 +763,30 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
       </AnimatePresence>
 
       {/* --- HUD Header (Top Bar) --- */}
-      <header className="flex-shrink-0 h-[80px] px-[60px] flex items-center justify-between z-50 bg-gradient-to-b from-black/80 to-transparent border-b border-white/5">
-        <div className="flex gap-10">
-          <div className="flex flex-col w-[380px]">
-            <div className="flex justify-between items-end mb-1">
-               <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-dim uppercase tracking-wider">The Prisoner</span>
+      <header className="flex-shrink-0 flex items-center justify-between z-50 bg-gradient-to-b from-black/80 to-transparent border-b border-white/5" style={{ height: '100px', padding: '0 60px' }}>
+        <div className="flex" style={{ gap: '40px' }}>
+          <div className="flex flex-col" style={{ width: '380px' }}>
+            <div className="flex justify-between items-end" style={{ marginBottom: '4px' }}>
+               <div className="flex items-center" style={{ gap: '8px' }}>
+                  <span className="text-text-dim uppercase tracking-wider" style={{ fontSize: '12px' }}>The Prisoner</span>
                   {battle.armor > 0 && (
                     <motion.div 
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      className="flex items-center gap-2 bg-blue-500/20 px-2 py-0.5 rounded border border-blue-400/50"
+                      className="flex items-center bg-blue-500/20 rounded border border-blue-400/50"
+                      style={{ padding: '2px 8px', gap: '8px' }}
                     >
-                      <Shield className="w-3 h-3 text-blue-400" />
-                      <span className="text-[10px] font-mono font-black text-blue-400">{battle.armor}</span>
+                      <Shield className="text-blue-400" style={{ width: '12px', height: '12px' }} />
+                      <span className="font-mono font-black text-blue-400" style={{ fontSize: '10px' }}>{battle.armor}</span>
                     </motion.div>
                   )}
                </div>
-               <span className="font-mono text-sm font-bold text-accent-red">
-                 <span className="text-white/40 font-normal mr-1">{battle.armor > 0 ? `(${battle.armor})` : ''}</span>
+               <span className="font-mono font-bold text-accent-red" style={{ fontSize: '14px' }}>
+                 <span className="text-white/40 font-normal mr-1" style={{ marginRight: '4px' }}>{battle.armor > 0 ? `(${battle.armor})` : ''}</span>
                  {battle.playerHp} / {run.maxHp}
                </span>
             </div>
-            <div className="h-[12px] bg-black border border-white/10 rounded-full flex items-center relative">
+            <div className="h-[12px] bg-black border border-white/10 rounded-full flex items-center relative" style={{ height: '12px' }}>
                <motion.div 
                 initial={{ width: '100%' }}
                 animate={{ width: `${(battle.playerHp / run.maxHp) * 100}%` }}
@@ -747,22 +812,23 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
             </div>
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] text-text-dim uppercase tracking-wider">Gold</span>
-            <span className="font-mono text-2xl font-bold text-accent-gold">{run.gold}</span>
+            <span className="text-text-dim uppercase tracking-wider" style={{ fontSize: '10px' }}>Gold</span>
+            <span className="font-mono font-bold text-accent-gold" style={{ fontSize: '24px' }}>{run.gold}</span>
           </div>
         </div>
 
         <div className="flex flex-col items-center">
-          <span className="text-[10px] text-text-dim uppercase tracking-wider mb-1">Node {run.currentNode} / 10</span>
-          <div className="flex gap-1.5">
+          <span className="text-text-dim uppercase tracking-wider mb-1" style={{ fontSize: '10px', marginBottom: '4px' }}>Node {run.currentNode} / 10</span>
+          <div className="flex" style={{ gap: '6px' }}>
             {[...Array(10)].map((_, i) => (
               <div 
                 key={i} 
                 className={cn(
-                  "w-[10px] h-[10px] rounded-full border border-border-color",
+                  "rounded-full border border-border-color",
                   i + 1 < run.currentNode ? "bg-text-dim" : 
                   i + 1 === run.currentNode ? "bg-accent-gold border-white shadow-[0_0_8px_var(--color-accent-gold)]" : "bg-black"
                 )} 
+                style={{ width: '10px', height: '10px' }}
               />
             ))}
           </div>
@@ -770,28 +836,30 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
 
         <button 
           onClick={() => setIsPaused(true)} 
-          className="w-[50px] h-[50px] border border-border-color flex items-center justify-center hover:border-accent-gold transition-colors rounded-sm"
+          className="border border-border-color flex items-center justify-center hover:border-accent-gold transition-colors rounded-sm"
+          style={{ width: '50px', height: '50px' }}
         >
-          <Pause className="w-6 h-6 text-white" />
+          <Pause className="text-white" style={{ width: '24px', height: '24px' }} />
         </button>
       </header>
 
       {/* --- Main Battlefield Area (Center) --- */}
-      <main className="grow flex flex-col items-center justify-center relative p-8 overflow-hidden">
+      <main className="flex-shrink-0 flex flex-col items-center justify-center relative overflow-hidden" style={{ width: '1920px', height: '640px', padding: '32px' }}>
         {/* Enemy Zone */}
-        <div className="w-full h-full flex flex-col items-center justify-center gap-10 overflow-hidden">
+        <div className="flex flex-col items-center justify-center overflow-hidden" style={{ width: '100%', height: '100%', gap: '40px' }}>
           <motion.div 
             animate={isEnemyShaking ? { x: [-10, 10, -10, 10, 0] } : {}}
-            className="flex flex-col items-center w-full"
+            className="flex flex-col items-center"
+            style={{ width: '100%' }}
           >
             <div className="relative group">
               {/* Intent Label */}
-              <div className="absolute -top-[50px] left-1/2 -translate-x-1/2 bg-black border border-accent-gold px-4 py-1 flex text-sm uppercase text-accent-gold whitespace-nowrap z-20 shadow-2xl skew-x-[-12deg]">
+              <div className="absolute bg-black border border-accent-gold flex uppercase text-accent-gold whitespace-nowrap z-20 shadow-2xl skew-x-[-12deg]" style={{ top: '-50px', left: '50%', transform: 'translateX(-50%)', padding: '4px 16px', fontSize: '14px' }}>
                 <span className="skew-x-[12deg] inline-block font-black">{battle.enemy.intent.type} {battle.enemy.intent.value}</span>
               </div>
               
               {/* Enemy Portrait */}
-              <div className="w-[260px] h-[260px] bg-gradient-to-br from-[#0a0a0a] to-[#1a1a1a] border border-white/10 flex items-center justify-center overflow-hidden shadow-[0_0_4rem_rgba(255,0,0,0.05)] rounded-lg">
+              <div className="bg-gradient-to-br from-[#0a0a0a] to-[#1a1a1a] border border-white/10 flex items-center justify-center overflow-hidden shadow-[0_0_4rem_rgba(255,0,0,0.05)] rounded-lg" style={{ width: '260px', height: '260px' }}>
                 <img 
                   src={battle.enemy.icon} 
                   alt={battle.enemy.name} 
@@ -805,27 +873,28 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
             </div>
 
             {/* Enemy HP Bar */}
-            <div className="w-[480px] mt-8">
-              <div className="flex justify-between items-end mb-1">
-                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-text-dim uppercase tracking-[0.2em] font-mono">{battle.enemy.name}</span>
+            <div style={{ width: '480px', marginTop: '32px' }}>
+              <div className="flex justify-between items-end" style={{ marginBottom: '4px' }}>
+                 <div className="flex items-center" style={{ gap: '8px' }}>
+                    <span className="text-text-dim uppercase tracking-[0.2em] font-mono" style={{ fontSize: '10px' }}>{battle.enemy.name}</span>
                     {battle.enemy.armor > 0 && (
                       <motion.div 
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="flex items-center gap-1 bg-blue-500/20 px-2 py-0.5 rounded border border-blue-400/50"
+                        className="flex items-center bg-blue-500/20 rounded border border-blue-400/50"
+                        style={{ padding: '2px 8px', gap: '4px' }}
                       >
-                        <Shield className="w-3 h-3 text-blue-400" />
-                        <span className="text-[10px] font-mono font-black text-blue-400">{battle.enemy.armor}</span>
+                        <Shield className="text-blue-400" style={{ width: '12px', height: '12px' }} />
+                        <span className="font-mono font-black text-blue-400" style={{ fontSize: '10px' }}>{battle.enemy.armor}</span>
                       </motion.div>
                     )}
                  </div>
-                 <span className="font-mono text-sm font-bold text-accent-red tracking-tight">
-                    <span className="text-white/40 font-normal mr-1 text-[12px]">{battle.enemy.armor > 0 ? `(${battle.enemy.armor})` : ''}</span>
+                 <span className="font-mono font-bold text-accent-red tracking-tight" style={{ fontSize: '14px' }}>
+                    <span className="text-white/40 font-normal mr-1" style={{ fontSize: '12px', marginRight: '4px' }}>{battle.enemy.armor > 0 ? `(${battle.armor})` : ''}</span>
                     {battle.enemy.hp} / {battle.enemy.maxHp}
                  </span>
               </div>
-              <div className="h-[15px] bg-black border border-white/5 relative flex items-center rounded-sm shadow-inner">
+              <div className="bg-black border border-white/5 relative flex items-center rounded-sm shadow-inner" style={{ height: '15px' }}>
                 <motion.div 
                   initial={{ width: '100%' }}
                   animate={{ width: `${(battle.enemy.hp / battle.enemy.maxHp) * 100}%` }}
@@ -853,68 +922,78 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
           </motion.div>
 
           {/* "出牌区" (Battle Zone) - Displays selected cards in a row */}
-          <div className="h-[200px] w-full flex flex-col items-center justify-center gap-4 z-20">
+          <div className="flex flex-col items-center justify-center z-20" style={{ width: '100%', height: '200px', gap: '16px' }}>
+             <div className="relative" style={{ height: '60px' }}>
+               <AnimatePresence>
+                  {battlePrompt && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 1.1 }}
+                      id="battle-prompt"
+                      className="bg-accent-red text-white font-black italic uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(255,62,62,0.4)]"
+                      style={{ padding: '12px 40px', fontSize: '24px' }}
+                    >
+                      {battlePrompt}
+                    </motion.div>
+                  )}
+               </AnimatePresence>
+            </div>
+
             <AnimatePresence>
               {battle.selectedCardIds.length > 0 && !battlePrompt && (
                  <motion.div 
                    initial={{ opacity: 0, scale: 0.8 }}
                    animate={{ opacity: 1, scale: 1 }}
                    exit={{ opacity: 0, scale: 0.8 }}
-                   className="flex items-center justify-center gap-2 p-4 bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-2xl"
+                   className="flex items-center justify-center bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-2xl"
+                   style={{ gap: '8px', padding: '16px' }}
                  >
                     {battle.hand.filter(c => battle.selectedCardIds.includes(c.id)).map(c => (
-                       <div key={c.id} className="w-[60px] h-[90px] bg-card-bg border border-border-color rounded-sm flex items-center justify-center relative shadow-md">
-                          <span className="text-xs font-black text-white">{c.name}</span>
+                       <div key={c.id} className="bg-card-bg border border-border-color rounded-sm flex items-center justify-center relative shadow-md" style={{ width: '60px', height: '90px' }}>
+                          <span className="font-black text-white" style={{ fontSize: '10px' }}>{c.name}</span>
                        </div>
                     ))}
                  </motion.div>
               )}
             </AnimatePresence>
             
-            {/* Battle Prompt Box is now reactive to the center overlay logic, 
-                but we define the anchor point here for professional layout consistency */}
-            <div className="h-[20px] w-full flex items-center justify-center">
-               <span className="text-[10px] text-text-dim uppercase tracking-[0.4em] font-mono">Battle Zone Active</span>
+            <div className="flex items-center justify-center" style={{ height: '20px', width: '100%' }}>
+               <span className="text-text-dim uppercase tracking-[0.4em] font-mono" style={{ fontSize: '10px' }}>Battle Zone Active</span>
             </div>
           </div>
         </div>
       </main>
 
       {/* --- Controls & Hand Zone (Bottom) --- */}
-      <footer className="flex-shrink-0 h-[340px] border-t border-white/5 bg-gradient-to-t from-black/95 to-[#050505] flex flex-col justify-between items-center z-40 p-4">
+      <footer className="flex-shrink-0 border-t border-white/5 bg-gradient-to-t from-black/95 to-[#050505] flex flex-col justify-between items-center z-40" style={{ height: '340px', padding: '16px' }}>
         
         {/* Control Buttons Bar */}
-        <div className="w-full max-w-[90%] flex items-center justify-between px-6">
-           <div className="flex flex-col items-start">
-              <span className="text-[10px] text-text-dim uppercase tracking-widest font-mono mb-1">可用重抽次数</span>
-              <div className="flex gap-1">
-                 {[...Array(2 + (run.relics.includes('shuffler') ? 1 : 0))].map((_, i) => (
-                    <div key={i} className={cn("w-[20px] h-[6px] rounded-full", i < battle.redrawCount ? "bg-accent-gold shadow-[0_0_8px_rgba(197,160,89,0.5)]" : "bg-white/5")} />
-                 ))}
-              </div>
-           </div>
+        <div className="flex items-center justify-center" style={{ width: '100%', gap: '24px', padding: '0 24px' }}>
+           <button 
+             id="btn-redraw"
+             onClick={handleRedraw}
+             disabled={battle.currentRedraws <= 0 || battle.selectedCardIds.length === 0}
+             className="group relative bg-[#111] border border-accent-gold text-accent-gold rounded-sm uppercase font-black tracking-widest transition-all hover:bg-accent-gold hover:text-black disabled:opacity-20 disabled:grayscale overflow-hidden"
+             style={{ padding: '12px 32px', fontSize: '14px' }}
+           >
+             <div className="relative z-10 flex items-center gap-2">
+               <RefreshCw className="group-hover:rotate-180 transition-transform duration-500" style={{ width: '16px', height: '16px' }} />
+               <span>🔄 换牌 ({battle.currentRedraws}/2)</span>
+             </div>
+           </button>
 
-           <div className="flex gap-4">
-              <button 
-                onClick={handleRedraw}
-                disabled={battle.redrawCount <= 0 || battle.selectedCardIds.length === 0}
-                className="group relative bg-black/50 border border-accent-gold text-accent-gold px-8 py-3 rounded-sm text-sm uppercase font-black tracking-widest transition-all hover:bg-accent-gold hover:text-black disabled:opacity-20 disabled:grayscale overflow-hidden"
-              >
-                <div className="relative z-10 flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                  <span>重抽 ({battle.selectedCardIds.length}) [{battle.redrawCount}]</span>
-                </div>
-              </button>
-
+           <div className="flex" style={{ gap: '16px' }}>
               <button 
                 onClick={handlePlay}
                 disabled={!battle.comboPreview}
                 className={cn(
-                  "px-12 py-3 font-black text-sm uppercase tracking-[0.3em] transition-all rounded-sm",
+                  "font-black uppercase tracking-[0.3em] transition-all rounded-sm",
                   battle.comboPreview 
                     ? "bg-accent-red text-white shadow-[0_0_2rem_rgba(255,0,0,0.2)] hover:bg-white hover:text-accent-red" 
                     : "bg-white/5 text-white/20 cursor-not-allowed border border-white/5"
                 )}
+                style={{ padding: '12px 48px', fontSize: '14px' }}
               >
                 Execute Action
               </button>
@@ -923,7 +1002,8 @@ export function BattleScreen({ run, onVictory, onDefeat, onPause }: BattleScreen
 
         {/* Dynamic Hand View */}
         <div 
-          className="w-full h-full flex justify-center items-end pb-8 px-16 relative select-none touch-none"
+          className="flex justify-center items-end relative select-none touch-none"
+          style={{ width: '100%', height: '100%', paddingBottom: '32px', paddingLeft: '64px', paddingRight: '64px' }}
           onPointerMove={handleContainerPointerMove}
         >
           <AnimatePresence mode="popLayout">

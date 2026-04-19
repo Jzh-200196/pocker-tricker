@@ -156,10 +156,10 @@ export default function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex justify-center items-center bg-black overflow-hidden select-none font-sans">
+    <div className="w-screen h-screen flex justify-center items-center bg-[#111] overflow-hidden select-none font-sans">
       <div 
         id="game-canvas"
-        className="relative bg-bg-deep shadow-2xl flex flex-col flex-shrink-0" 
+        className="relative bg-bg-deep shadow-2xl flex flex-col flex-shrink-0 overflow-hidden" 
         style={{ 
           width: '1920px', 
           height: '1080px',
@@ -179,24 +179,25 @@ export default function App() {
               <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(circle_at_50%_40%,_#4d0000_0%,_#050505_70%)]" />
               
               <div className="relative z-10 w-full">
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="space-y-4">
-                  <h2 className="text-accent-gold text-lg font-mono tracking-[12px] uppercase opacity-60">
+                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center" style={{ gap: '16px' }}>
+                  <h2 className="text-accent-gold font-mono uppercase opacity-60" style={{ fontSize: '18px', letterSpacing: '12px' }}>
                     Deckbound Siege
                   </h2>
-                  <h1 className="text-[120px] font-serif font-black italic tracking-tighter text-text-main leading-[100px] drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                  <h1 className="font-serif font-black italic tracking-tighter text-text-main drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]" style={{ fontSize: '120px', lineHeight: '100px' }}>
                     DARK DECK<br/>
                     <span className="text-accent-red">EXECUTIONER</span>
                   </h1>
-                  <p className="text-text-dim max-w-2xl mx-auto italic font-serif text-3xl mt-6">
+                  <p className="text-text-dim italic font-serif" style={{ fontSize: '30px', maxWidth: '672px', marginTop: '24px' }}>
                     "The cards hold your fate, the blade holds your soul."
                   </p>
                 </motion.div>
                 
                 <motion.button 
-                  whileHover={{ scale: 1.05, letterSpacing: '8px' }}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={startNewRun}
-                  className="mt-16 inline-block bg-black border border-accent-gold text-accent-gold font-bold px-12 py-6 text-xl uppercase tracking-widest transition-all hover:bg-accent-gold hover:text-black shadow-[0_0_20px_rgba(197,160,89,0.1)]"
+                  className="bg-black border border-accent-gold text-accent-gold font-bold uppercase tracking-widest transition-all hover:bg-accent-gold hover:text-black shadow-[0_0_20px_rgba(197,160,89,0.1)]"
+                  style={{ marginTop: '64px', padding: '24px 48px', fontSize: '20px' }}
                 >
                   Begin Challenge
                 </motion.button>
@@ -240,32 +241,36 @@ export default function App() {
               key="gameover"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="w-full h-full flex flex-col items-center justify-center text-center p-24"
+              className="w-full h-full flex flex-col items-center justify-center text-center"
+              style={{ padding: '96px' }}
             >
               <div className="absolute inset-0 opacity-40 pointer-events-none bg-[radial-gradient(circle_at_50%_50%,_#300_0%,_#050505_100%)]" />
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="space-y-8 relative z-10"
+                className="relative z-10"
+                style={{ gap: '32px', display: 'flex', flexDirection: 'column' }}
               >
-                <Skull className="w-32 h-32 text-accent-red mx-auto drop-shadow-[0_0_20px_rgba(255,62,62,0.5)]" />
-                <h1 className="text-7xl font-serif font-black text-text-main italic tracking-tighter uppercase">Challenge Failed</h1>
-                <p className="text-text-dim uppercase tracking-widest text-xl">Your deck remains in the ashes</p>
+                <Skull className="text-accent-red mx-auto drop-shadow-[0_0_20px_rgba(255,62,62,0.5)]" style={{ width: '128px', height: '128px' }} />
+                <h1 className="font-serif font-black text-text-main italic tracking-tighter uppercase" style={{ fontSize: '72px' }}>Challenge Failed</h1>
+                <p className="text-text-dim uppercase tracking-widest" style={{ fontSize: '20px' }}>Your deck remains in the ashes</p>
               </motion.div>
               
-              <div className="mt-20 flex flex-col gap-6 w-[400px] relative z-10">
+              <div className="flex flex-col relative z-10" style={{ marginTop: '80px', gap: '24px', width: '400px' }}>
                 <button 
                   onClick={startNewRun}
-                  className="flex items-center justify-center gap-4 bg-accent-red text-white font-black py-6 text-xl uppercase tracking-widest hover:bg-white hover:text-black transition-all shadow-[0_0_20px_rgba(255,62,62,0.2)]"
+                  className="flex items-center justify-center bg-accent-red text-white font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all shadow-[0_0_20px_rgba(255,62,62,0.2)]"
+                  style={{ gap: '16px', padding: '24px 0', fontSize: '20px' }}
                 >
-                  <RotateCcw className="w-6 h-6" />
+                  <RotateCcw style={{ width: '24px', height: '24px' }} />
                   Retry Run
                 </button>
                 <button 
                   onClick={() => setGameState(p => ({ ...p, currentScreen: 'Home' }))}
-                  className="flex items-center justify-center gap-4 bg-transparent text-text-dim border border-border-color py-6 text-xl uppercase tracking-widest hover:border-white hover:text-white transition-all"
+                  className="flex items-center justify-center bg-transparent text-text-dim border border-border-color uppercase tracking-widest hover:border-white hover:text-white transition-all"
+                  style={{ gap: '16px', padding: '24px 0', fontSize: '20px' }}
                 >
-                  <HomeIcon className="w-6 h-6" />
+                  <HomeIcon style={{ width: '24px', height: '24px' }} />
                   Main Menu
                 </button>
               </div>

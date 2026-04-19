@@ -95,13 +95,15 @@ export interface BattleState {
   enemy: Enemy;
   playerHp: number;
   hand: Card[];
-  redrawCount: number;
+  drawPile: Card[];
+  discardPile: Card[];
+  currentRedraws: number;
+  bonusRedrawsNextTurn: number;
   armor: number;
   turn: number;
   comboPreview: ComboResult | null;
   selectedCardIds: string[];
   mechanism: AnomalyMechanism;
   consecutivePairs: number; // For Steady Chip relic
-  firstRedrawFreeUsed: boolean; // For Shuffler relic
   firstStraightUsed: boolean; // For Gale Gloves relic
 }

@@ -83,49 +83,52 @@ export function ShopScreen({ run, updateRun, onExit }: ShopScreenProps) {
   };
 
   return (
-    <div className="w-full h-full bg-bg-deep text-text-main p-20 flex flex-col gap-12 relative overflow-hidden">
+    <div className="bg-bg-deep text-text-main relative overflow-hidden" style={{ width: '1920px', height: '1080px', padding: '80px', display: 'flex', flexDirection: 'column', gap: '48px' }}>
       <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(circle_at_50%_40%,_#1a0f0f_0%,_#050505_70%)]" />
       
-      <div className="relative z-10 flex justify-between items-center gap-12">
-        <div className="space-y-1 text-left">
-          <h2 className="text-accent-gold text-sm font-mono tracking-widest uppercase">Secret Market</h2>
-          <h1 className="text-6xl font-serif font-black italic tracking-tighter text-text-main leading-none">THE BLACK MERCHANT</h1>
+      <div className="relative z-10 flex justify-between items-center" style={{ gap: '48px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <h2 className="text-accent-gold font-mono uppercase" style={{ fontSize: '14px', letterSpacing: '4px' }}>Secret Market</h2>
+          <h1 className="font-serif font-black italic tracking-tighter text-text-main leading-none" style={{ fontSize: '64px' }}>THE BLACK MERCHANT</h1>
         </div>
-        <div className="flex items-center gap-8">
-           <div className="bg-black/40 border border-accent-gold text-accent-gold px-8 py-3 rounded-lg font-mono text-4xl">
-             {run.gold} <span className="text-sm uppercase ml-1 opacity-60">Gold</span>
+        <div className="flex items-center" style={{ gap: '32px' }}>
+           <div className="bg-black/40 border border-accent-gold text-accent-gold rounded-lg font-mono" style={{ padding: '12px 32px', fontSize: '36px' }}>
+             {run.gold} <span className="uppercase opacity-60" style={{ fontSize: '14px', marginLeft: '4px' }}>Gold</span>
            </div>
            <button 
             onClick={onExit}
-            className="flex items-center gap-2 text-text-dim hover:text-white transition-colors uppercase text-sm tracking-widest"
+            className="flex items-center text-text-dim hover:text-white transition-colors uppercase tracking-widest"
+            style={{ fontSize: '14px', gap: '8px' }}
            >
-             <ArrowLeft className="w-5 h-5" />
+             <ArrowLeft style={{ width: '20px', height: '20px' }} />
              Leave Shop
            </button>
         </div>
       </div>
 
-      <div className="relative z-10 grid grid-cols-12 gap-12 flex-1 items-start overflow-hidden">
+      <div className="relative z-10 flex-1 overflow-hidden" style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: '48px' }}>
         {/* CARDS SECTION */}
-        <div className="col-span-8 flex flex-col gap-6 overflow-hidden h-full w-full">
-           <div className="flex items-center gap-2 text-accent-gold flex-shrink-0">
-              <Sparkles className="w-4 h-4" />
-              <h3 className="uppercase tracking-[0.3em] text-xs font-bold">Arcane Collection</h3>
+        <div className="flex flex-col overflow-hidden" style={{ gridColumn: 'span 8 / span 8', height: '100%', gap: '24px' }}>
+           <div className="flex items-center text-accent-gold">
+              <Sparkles style={{ width: '16px', height: '16px', marginRight: '8px' }} />
+              <h3 className="uppercase font-bold" style={{ tracking: '0.3em', fontSize: '12px' }}>Arcane Collection</h3>
            </div>
-           <div className="grid grid-cols-3 gap-6 overflow-y-auto pr-2 flex-grow custom-scrollbar">
+           <div className="grid grid-cols-3 overflow-y-auto custom-scrollbar" style={{ gap: '24px', paddingRight: '8px', flexGrow: 1 }}>
               {shopCards.map((shopItem, idx) => (
                 <div 
                   key={idx} 
                   className={cn(
-                    "flex flex-col items-center gap-6 p-6 rounded-xl border border-border-color bg-black/40 relative group",
+                    "flex flex-col items-center rounded-xl border border-border-color bg-black/40 relative group",
                     shopItem.purchased && "opacity-30 pointer-events-none"
                   )}
+                  style={{ gap: '24px', padding: '24px' }}
                 >
                   <CardComponent card={shopItem.item} isSelected={false} onToggleSelect={() => {}} />
                   <button
                     disabled={run.gold < shopItem.price || shopItem.purchased}
                     onClick={() => buyCard(idx)}
-                    className="w-full bg-accent-gold/10 border border-accent-gold/40 text-accent-gold py-3 rounded-sm text-sm font-bold hover:bg-accent-gold hover:text-black transition-all"
+                    className="w-full bg-accent-gold/10 border border-accent-gold/40 text-accent-gold rounded-sm font-bold hover:bg-accent-gold hover:text-black transition-all"
+                    style={{ padding: '12px 0', fontSize: '14px' }}
                   >
                     {shopItem.purchased ? "SOLD OUT" : `${shopItem.price} G`}
                   </button>
@@ -135,38 +138,39 @@ export function ShopScreen({ run, updateRun, onExit }: ShopScreenProps) {
         </div>
 
         {/* RELICS SECTION */}
-        <div className="col-span-4 flex flex-col gap-6 w-full h-full overflow-hidden">
-           <div className="flex items-center gap-2 text-accent-red flex-shrink-0">
-              <Tag className="w-4 h-4" />
-              <h3 className="uppercase tracking-[0.3em] text-xs font-bold">Mystic Relics</h3>
+        <div className="flex flex-col overflow-hidden" style={{ gridColumn: 'span 4 / span 4', height: '100%', gap: '24px' }}>
+           <div className="flex items-center text-accent-red">
+              <Tag style={{ width: '16px', height: '16px', marginRight: '8px' }} />
+              <h3 className="uppercase font-bold" style={{ tracking: '0.3em', fontSize: '12px' }}>Mystic Relics</h3>
            </div>
-           <div className="space-y-6 overflow-y-auto flex-grow pr-2 custom-scrollbar">
+           <div className="overflow-y-auto custom-scrollbar" style={{ gap: '24px', paddingRight: '8px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               {shopRelics.map((shopItem, idx) => (
                 <div 
                   key={idx}
                   className={cn(
-                    "p-6 rounded-xl border border-border-color bg-card-bg group transition-all",
-                    shopItem.purchased && "opacity-20 grayscale"
+                    "rounded-xl border border-border-color bg-card-bg group transition-all"
                   )}
+                  style={{ padding: '24px', opacity: shopItem.purchased ? 0.2 : 1 }}
                 >
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-accent-gold font-bold italic text-xl">{shopItem.item.name}</h4>
+                  <div className="flex justify-between items-start" style={{ marginBottom: '16px' }}>
+                    <h4 className="text-accent-gold font-bold italic" style={{ fontSize: '20px' }}>{shopItem.item.name}</h4>
                     <span className={cn(
-                      "text-[10px] px-2 py-0.5 rounded border uppercase",
+                      "rounded border uppercase",
                       shopItem.item.rarity === 'Epic' ? "border-purple-500/50 text-purple-400" :
                       shopItem.item.rarity === 'Rare' ? "border-blue-500/50 text-blue-400" : "border-text-dim text-text-dim"
-                    )}>
+                    )} style={{ fontSize: '10px', padding: '2px 8px' }}>
                       {shopItem.item.rarity}
                     </span>
                   </div>
-                  <p className="text-sm text-text-dim mb-6 leading-relaxed">{shopItem.item.description}</p>
+                  <p className="text-text-dim leading-relaxed" style={{ fontSize: '14px', marginBottom: '24px' }}>{shopItem.item.description}</p>
                   <button
                     disabled={run.gold < shopItem.price || shopItem.purchased}
                     onClick={() => buyRelic(idx)}
-                    className="w-full flex justify-between items-center bg-black/40 border border-white/5 p-4 rounded hover:border-accent-gold hover:text-accent-gold transition-all"
+                    className="w-full flex justify-between items-center bg-black/40 border border-white/5 rounded hover:border-accent-gold hover:text-accent-gold transition-all"
+                    style={{ padding: '16px' }}
                   >
-                    <span className="text-xs uppercase tracking-widest font-black">Purchase</span>
-                    <span className="font-mono text-sm">{shopItem.purchased ? "---" : `${shopItem.price} G`}</span>
+                    <span className="uppercase tracking-widest font-black" style={{ fontSize: '12px' }}>Purchase</span>
+                    <span className="font-mono" style={{ fontSize: '14px' }}>{shopItem.purchased ? "---" : `${shopItem.price} G`}</span>
                   </button>
                 </div>
               ))}

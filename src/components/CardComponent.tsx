@@ -82,11 +82,11 @@ export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, d
       onClick={() => !disabled && onToggleSelect?.(card.id)}
     >
       {/* Card Content */}
-      <div className="p-1 h-full flex flex-col font-mono relative">
+      <div className="h-full flex flex-col font-mono relative" style={{ padding: '4px' }}>
         {/* Top-Left Corner Rank (Standard) */}
         {card.suite !== 'Special' && (
-          <div className="absolute top-1 left-2 flex flex-col items-center leading-none z-10 pointer-events-none">
-            <div className={cn("text-2xl font-black tracking-tighter drop-shadow-md", card.suite === 'Hearts' || card.suite === 'Diamonds' ? "text-accent-red" : "text-white")}>
+          <div className="absolute flex flex-col items-center leading-none z-10 pointer-events-none" style={{ top: '4px', left: '8px' }}>
+            <div className={cn("font-black tracking-tighter drop-shadow-md", card.suite === 'Hearts' || card.suite === 'Diamonds' ? "text-accent-red" : "text-white")} style={{ fontSize: '24px' }}>
               {displayRank(card.value)}
             </div>
           </div>
@@ -94,21 +94,21 @@ export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, d
 
         {/* Top-Left Marker (Special) */}
         {card.effect && (
-          <div className="absolute top-1 left-1 flex flex-col items-start z-20 pointer-events-none">
-            <div className="text-xl filter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+          <div className="absolute flex flex-col items-start z-20 pointer-events-none" style={{ top: '4px', left: '4px' }}>
+            <div className="filter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]" style={{ fontSize: '20px' }}>
               {getEffectInfo(card.effect).title}
             </div>
-            <div className="text-[7px] text-white font-bold leading-tight mt-0.5 bg-black/40 px-1 rounded whitespace-nowrap">
+            <div className="text-white font-bold leading-tight bg-black/40 rounded whitespace-nowrap" style={{ fontSize: '7px', marginTop: '2px', padding: '0 4px' }}>
               {getEffectInfo(card.effect).desc}
             </div>
           </div>
         )}
 
-        <div className="flex-grow mt-10 my-1 bg-[#0d0d0d]/40 border border-border-color/20 rounded-sm flex items-center justify-center relative overflow-hidden">
-           <span className={cn("text-6xl opacity-5", card.suite === 'Special' && "text-accent-gold opacity-10")}>{getCenterIcon(card)}</span>
+        <div className="flex-grow bg-[#0d0d0d]/40 border border-border-color/20 rounded-sm flex items-center justify-center relative overflow-hidden" style={{ marginTop: '40px', marginBottom: '4px' }}>
+           <span className={cn("opacity-5", card.suite === 'Special' && "text-accent-gold opacity-10")} style={{ fontSize: '60px' }}>{getCenterIcon(card)}</span>
            {card.suite !== 'Special' && (
              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-5xl font-black text-white/5 tracking-tighter">
+                <div className="font-black text-white/5 tracking-tighter" style={{ fontSize: '48px' }}>
                   {displayRank(card.value)}
                 </div>
              </div>
@@ -123,11 +123,12 @@ export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, d
           onTogglePin?.(card.id);
         }}
         className={cn(
-          "absolute bottom-2 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center transition-all border",
+          "absolute -translate-x-1/2 rounded-full flex items-center justify-center transition-all border",
           card.isPinned ? "bg-accent-gold text-black border-white" : "bg-[#222] text-[#666] border-[#444] hover:text-white"
         )}
+        style={{ bottom: '8px', left: '50%', width: '24px', height: '24px' }}
       >
-        <Pin className="w-3 h-3" />
+        <Pin style={{ width: '12px', height: '12px' }} />
       </button>
     </motion.div>
   );
