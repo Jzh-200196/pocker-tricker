@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Georgia&family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-bg-deep: #050505;
+  --color-card-bg: #1a1a1a;
+  --color-accent-red: #ff3e3e;
+  --color-accent-gold: #c5a059;
+  --color-text-main: #e0e0e0;
+  --color-text-dim: #888;
+  --color-border-color: #333;
+  
+  --font-serif: "Georgia", serif;
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", Courier, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-deep text-text-main antialiased overflow-hidden selection:bg-accent-red/30 font-sans;
+    background-image: radial-gradient(circle at 50% 40%, #1a0f0f 0%, #050505 70%);
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
