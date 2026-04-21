@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Card, Suite, CardEffect } from '../types';
+import { Card, Suite, CardEffect } from '../types/card';
 
 export function generateRandomCard(): Card {
   const isSpecial = Math.random() < 0.1;

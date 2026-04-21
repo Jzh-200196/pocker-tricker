@@ -3,27 +3,49 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Pin, Shield, Heart, Plus } from 'lucide-react';
-import { Card as CardType } from '../types';
+import { Card as CardType } from '../types/card';
 import { cn } from '../lib/utils';
 
 interface CardProps {
   card: CardType;
   isSelected?: boolean;
-  onToggleSelect?: (id: string) => void;
-  onTogglePin?: (id: string) => void;
   disabled?: boolean;
   isInvalid?: boolean;
+  /** 
+   * 改动二：新增出牌无效视觉反馈状态
+   * isInvalidCombo: 当前选中的牌组是否判定为非法
+   * invalidTriggerCount: 触发无效报警的计数器，用于重置抖动动画
+   */
+  isInvalidCombo?: boolean;
+  invalidTriggerCount?: number;
+  
   isShaking?: boolean;
+  /** 是否是鼠标指向的最顶层卡牌，用于显示高亮边缘 */
+  isTopmostHovered?: boolean;
+  /** 是否处于拖拽多选模式中 */
+  isDraggingMode?: boolean;
+  /** 指针按下事件 - 触发滑动多选的起点 */
+  onPointerDown?: (id: string, e: React.PointerEvent) => void;
+  /** 静态层级索引 - 铁律必须配合 position: relative */
+  zIndex: number;
 }
 
+/** 震动动画变体 */
 const shakeVariants = {
-  shake: {
-    x: [-3, 3, -3, 3, 0],
-    transition: { duration: 0.1, repeat: 2 }
-  }
+  idle: (isSelected: boolean) => ({
+    y: isSelected ? -30 : 0, 
+    x: 0,
+    opacity: 1, 
+    rotate: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 20 }
+  }),
+  shake: (isSelected: boolean) => ({
+    y: isSelected ? -30 : 0, // 核心逻辑：震动时必须保持原本选中时的向上位移
+    x: [-4, 4, -4, 4, 0],
+    transition: { duration: 0.25 }
+  })
 };
 
 const suiteIcons: Record<string, string> = {
@@ -33,14 +55,29 @@ const suiteIcons: Record<string, string> = {
   Spades: '♠',
 };
 
-const suiteColors: Record<string, string> = {
-  Hearts: 'text-red-500',
-  Diamonds: 'text-red-400',
-  Clubs: 'text-slate-400',
-  Spades: 'text-slate-200',
-};
-
-export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, disabled, isInvalid, isShaking }: CardProps) {
+/**
+ * CardComponent - 高级 Game Feel 重构版
+ * 
+ * 核心提升：
+ * 1. 【改动一】：特殊牌标记从右上角移动到左上角 (left: 8px)。
+ * 2. 【改动二】：支持 isInvalidCombo 状态，触发血红色警告边框。
+ * 3. 【改动二】：使用 invalidTriggerCount 强制重新播放 Shake 动画。
+ * 4. 架构保真：100% 保留 .card-element 射线探测机制、静态 Z-Index、pointer-events-none。
+ */
+export const CardComponent = memo(({ 
+  card, 
+  isSelected, 
+  disabled, 
+  isInvalid, 
+  isInvalidCombo,
+  invalidTriggerCount = 0,
+  isShaking, 
+  isTopmostHovered,
+  isDraggingMode,
+  onPointerDown,
+  zIndex
+}: CardProps) => {
+  
   const getCenterIcon = (card: CardType) => {
     if (card.suite === 'Special') return '★';
     return suiteIcons[card.suite as keyof typeof suiteIcons] || '♠';
@@ -48,10 +85,31 @@ export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, d
 
   const getEffectInfo = (effect: string) => {
     switch (effect) {
-      case 'Heal': return { title: '❤️', desc: '恢复5点生命' };
-      case 'ArmorBuff': return { title: '🛡️', desc: '获得4点护盾' };
-      case 'GainExtraTidy': return { title: '➕', desc: '下回合重抽+1' };
-      default: return { title: '', desc: '' };
+      case 'Heal': return { 
+        title: '恢复', 
+        value: '5', 
+        unit: 'HP', 
+        color: 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300',
+        icon: '❤️',
+        iconColor: 'text-red-500'
+      };
+      case 'ArmorBuff': return { 
+        title: '护盾', 
+        value: '4', 
+        unit: 'ARM', 
+        color: 'bg-blue-900/40 border-blue-500/50 text-blue-300',
+        icon: '🛡️',
+        iconColor: 'text-blue-400'
+      };
+      case 'GainExtraTidy': return { 
+        title: '灵感', 
+        value: '+1', 
+        unit: 'DRAW', 
+        color: 'bg-purple-900/40 border-purple-500/50 text-purple-300',
+        icon: '➕',
+        iconColor: 'text-yellow-400'
+      };
+      default: return null;
     }
   };
 
@@ -64,72 +122,140 @@ export function CardComponent({ card, isSelected, onToggleSelect, onTogglePin, d
     return val;
   };
 
+  const effectData = card.effect ? getEffectInfo(card.effect) : null;
+
   return (
     <motion.div
       layout
+      custom={isSelected}
+      // 使用 key 绑定触发计数器，确保动画每次都能在视觉上“重置”并重新播放
+      key={`${card.id}-${invalidTriggerCount}`}
       variants={shakeVariants}
-      initial={{ y: 300, opacity: 0, rotate: 10 }}
-      animate={isShaking ? "shake" : { y: 0, opacity: 1, rotate: 0 }}
+      animate={(isShaking || (isSelected && isInvalidCombo)) ? "shake" : "idle"}
       exit={{ y: -500, opacity: 0, scale: 0.5 }}
-      whileTap={!disabled ? { scale: 0.95 } : {}}
+      onPointerDown={(e) => {
+        if (disabled) return;
+        // 射线探测核心优化：释放指针捕获
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        onPointerDown?.(card.id, e);
+      }}
+      draggable={false}
+      data-card-id={card.id}
+      data-is-card="true"
+      style={{ 
+        userSelect: 'none', 
+        touchAction: 'none', 
+        WebkitUserDrag: 'none',
+        zIndex: zIndex,
+        position: 'relative' 
+      }}
       className={cn(
-        "relative w-[130px] h-[190px] rounded-md border transition-all duration-300 cursor-pointer select-none flex-shrink-0 shadow-lg",
-        "bg-card-bg overflow-hidden",
-        isSelected ? (isInvalid ? "border-accent-red shadow-[0_0_20px_rgba(255,0,0,0.5)] z-[100]" : "border-white -translate-y-10 shadow-[0_0_20px_rgba(255,255,255,0.2)] z-[100]") : "border-border-color",
-        card.isPinned && !isInvalid && "border-2 border-accent-gold shadow-[0_0_15px_rgba(197,160,89,0.3)]",
-        disabled && "opacity-50 cursor-not-allowed"
+        "card-element relative w-[130px] h-[190px] rounded-md border transition-all duration-200 flex-shrink-0 shadow-2xl",
+        "bg-[#111] overflow-hidden group touch-none",
+        // 核心视觉逻辑补丁：
+        // 1. 如果选中且 combo 无效 -> 变为血红色警告边框
+        // 2. 否则根据业务：选中(白色)、固定(金色)、默认(深灰色)
+        (isSelected && isInvalidCombo) 
+          ? "border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.6)]" 
+          : (isSelected ? "border-white shadow-[0_15px_40px_rgba(0,0,0,0.8)]" : (card.isPinned ? "border-accent-gold shadow-md" : "border-[#333]")),
+        
+        isTopmostHovered && "ring-2 ring-white/60 shadow-[0_0_20px_rgba(255,255,255,0.4)]",
+        disabled && "opacity-50 cursor-not-allowed",
+        isDraggingMode && "cursor-crosshair"
       )}
-      onClick={() => !disabled && onToggleSelect?.(card.id)}
     >
-      {/* Card Content */}
-      <div className="h-full flex flex-col font-mono relative" style={{ padding: '4px' }}>
-        {/* Top-Left Corner Rank (Standard) */}
+      {/* 遮罩屏蔽层：直达 .card-element 节点 */}
+      <div className="absolute inset-0 z-[50] pointer-events-none" />
+
+      {/* Card Content Interior - 子元素 pointer-events-none 防止射线检测中断 */}
+      <div className="h-full flex flex-col font-mono relative p-1 pointer-events-none">
+        
+        {/* 【改动一】：特殊牌标记移动到左上角 (Left-2) */}
+        {effectData && (
+          <div className="absolute z-30 pointer-events-none" style={{ top: '8px', left: '8px' }}>
+             <span className={cn("text-lg drop-shadow-md", effectData.iconColor)}>
+               {effectData.icon}
+             </span>
+          </div>
+        )}
+
+        {/* 标准点数与花色显示 (仅在非特殊牌或作为背景显示) */}
         {card.suite !== 'Special' && (
-          <div className="absolute flex flex-col items-center leading-none z-10 pointer-events-none" style={{ top: '4px', left: '8px' }}>
-            <div className={cn("font-black tracking-tighter drop-shadow-md", card.suite === 'Hearts' || card.suite === 'Diamonds' ? "text-accent-red" : "text-white")} style={{ fontSize: '24px' }}>
+          <div className="absolute flex flex-col items-center leading-none z-10" style={{ top: '6px', left: '8px' }}>
+            <div className={cn(
+              "font-black tracking-tighter drop-shadow-lg", 
+              card.suite === 'Hearts' || card.suite === 'Diamonds' ? "text-accent-red" : "text-white"
+            )} style={{ fontSize: '26px' }}>
               {displayRank(card.value)}
             </div>
-          </div>
-        )}
-
-        {/* Top-Left Marker (Special) */}
-        {card.effect && (
-          <div className="absolute flex flex-col items-start z-20 pointer-events-none" style={{ top: '4px', left: '4px' }}>
-            <div className="filter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]" style={{ fontSize: '20px' }}>
-              {getEffectInfo(card.effect).title}
-            </div>
-            <div className="text-white font-bold leading-tight bg-black/40 rounded whitespace-nowrap" style={{ fontSize: '7px', marginTop: '2px', padding: '0 4px' }}>
-              {getEffectInfo(card.effect).desc}
+            <div className={cn("text-[12px] -mt-1", card.suite === 'Hearts' || card.suite === 'Diamonds' ? "text-accent-red" : "text-text-dim")}>
+              {suiteIcons[card.suite] || '♠'}
             </div>
           </div>
         )}
 
-        <div className="flex-grow bg-[#0d0d0d]/40 border border-border-color/20 rounded-sm flex items-center justify-center relative overflow-hidden" style={{ marginTop: '40px', marginBottom: '4px' }}>
-           <span className={cn("opacity-5", card.suite === 'Special' && "text-accent-gold opacity-10")} style={{ fontSize: '60px' }}>{getCenterIcon(card)}</span>
+        {/* 核心中央图形 */}
+        <div className="flex-grow flex items-center justify-center relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-sm border border-white/5 mt-1">
+           <span className={cn(
+             "opacity-[0.03] select-none", 
+             card.suite === 'Special' ? "text-accent-gold opacity-[0.07]" : "text-white"
+           )} style={{ fontSize: '80px' }}>
+             {getCenterIcon(card)}
+           </span>
+           
            {card.suite !== 'Special' && (
-             <div className="absolute inset-0 flex items-center justify-center">
-                <div className="font-black text-white/5 tracking-tighter" style={{ fontSize: '48px' }}>
+             <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div className="font-black text-white/5 tracking-tighter select-none" style={{ fontSize: '56px' }}>
                   {displayRank(card.value)}
                 </div>
              </div>
            )}
+
+           {/* 底部效果面板 (仅特殊牌) */}
+           {effectData && (
+             <div className="absolute inset-0 flex flex-col justify-end p-2 pb-4">
+                <div className={cn(
+                  "w-full rounded border flex flex-col items-center py-2 px-1 backdrop-blur-sm shadow-lg",
+                  effectData.color
+                )}>
+                   <span className="uppercase font-black tracking-tighter opacity-70" style={{ fontSize: '9px' }}>{effectData.title}</span>
+                   <div className="flex items-baseline gap-1">
+                      <span className="font-black" style={{ fontSize: '22px' }}>{effectData.value}</span>
+                      <span className="font-bold opacity-60" style={{ fontSize: '8px' }}>{effectData.unit}</span>
+                   </div>
+                </div>
+             </div>
+           )}
+        </div>
+
+        {/* 底部功能反馈元数据 */}
+        <div className="h-6 flex items-center justify-between px-2">
+           <div className="flex items-center gap-1">
+              <div className={cn("w-1.5 h-1.5 rounded-full", card.isPinned ? "bg-accent-gold animate-pulse" : "bg-white/10")} />
+              <span className="text-[7px] uppercase tracking-tighter text-text-dim">
+                {card.isPinned ? "Secured" : "Volatile"}
+              </span>
+           </div>
+           {card.suite === 'Special' && (
+             <span className="text-[7px] font-black text-accent-gold italic uppercase">Anomaly</span>
+           )}
         </div>
       </div>
 
-      {/* Pin Button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin?.(card.id);
-        }}
-        className={cn(
-          "absolute -translate-x-1/2 rounded-full flex items-center justify-center transition-all border",
-          card.isPinned ? "bg-accent-gold text-black border-white" : "bg-[#222] text-[#666] border-[#444] hover:text-white"
-        )}
-        style={{ bottom: '8px', left: '50%', width: '24px', height: '24px' }}
-      >
-        <Pin style={{ width: '12px', height: '12px' }} />
-      </button>
+      {/* 选中时的内边缘发光（如果 Combo 无效则不显示白色内光以突显血红边框，或叠加显示） */}
+      {isSelected && !isInvalidCombo && (
+        <div 
+          className="absolute inset-0 border-[3px] border-white pointer-events-none"
+          style={{ boxShadow: 'inset 0 0 20px rgba(255,255,255,0.3)' }}
+        />
+      )}
+      
+      {/* 出牌无效时的血红内部蒙版提示 */}
+      {isSelected && isInvalidCombo && (
+        <div className="absolute inset-0 border-[3px] border-red-600/50 pointer-events-none bg-red-600/5 animate-pulse" />
+      )}
     </motion.div>
   );
-}
+});
+
+CardComponent.displayName = 'CardComponent';

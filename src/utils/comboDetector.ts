@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Card, ComboResult, ComboType } from '../types';
+import { Card, ComboResult, ComboType } from '../types/card';
 
 export function detectCombo(cards: Card[]): ComboResult {
   if (cards.length === 0) return { type: 'HighCard', displayName: '无', baseDamage: 0, multiplier: 1, cards: [] };

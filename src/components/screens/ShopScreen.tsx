@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, ShoppingCart, Tag, Sparkles } from 'lucide-react';
-import { drawXCards } from '../utils/cardGenerator';
-import { RunState, Card, Relic, Suite } from '../types';
-import { CardComponent } from './CardComponent';
-import { cn } from '../lib/utils';
-import { RELICS, SUITES } from '../constants';
+import { ArrowLeft, Tag, Sparkles } from 'lucide-react';
+import { drawXCards } from '../../utils/cardGenerator';
+import { RunState, RoomType } from '../../types/game';
+import { Card } from '../../types/card';
+import { Relic } from '../../types/relic';
+import { CardComponent } from '../CardComponent';
+import { cn } from '../../lib/utils';
+import { RELICS } from '../../constants/relics';
 
 interface ShopScreenProps {
   run: RunState;
@@ -123,7 +125,7 @@ export function ShopScreen({ run, updateRun, onExit }: ShopScreenProps) {
                   )}
                   style={{ gap: '24px', padding: '24px' }}
                 >
-                  <CardComponent card={shopItem.item} isSelected={false} onToggleSelect={() => {}} />
+                  <CardComponent card={shopItem.item} isSelected={false} />
                   <button
                     disabled={run.gold < shopItem.price || shopItem.purchased}
                     onClick={() => buyCard(idx)}

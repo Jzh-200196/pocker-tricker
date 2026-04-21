@@ -35,3 +35,26 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* Enemy Backgrounds */
+.bg-void-abyss {
+  background: radial-gradient(circle at 50% 50%, #1a0f0f 0%, #050505 100%),
+              url('https://picsum.photos/seed/abyss/1920/1080?blur=10');
+}
+
+.bg-eternal-grave {
+  background: radial-gradient(circle at 50% 50%, #0f1a10 0%, #050505 100%),
+              url('https://picsum.photos/seed/graveyard/1920/1080?blur=10');
+}
+
+/* Interaction Helpers for 0-latency feedback */
+.selected-visual-up {
+  transform: translateY(-30px) !important;
+  transition: transform 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28) !important;
+}
+
+.hover-glow-top {
+  ring: 2px !important;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}

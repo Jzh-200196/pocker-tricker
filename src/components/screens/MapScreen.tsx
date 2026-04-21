@@ -6,8 +6,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Swords, ShoppingCart, Coffee, Skull, Zap } from 'lucide-react';
-import { RoomType } from '../types';
-import { cn } from '../lib/utils';
+import { RoomType } from '../../types/game';
+import { cn } from '../../lib/utils';
 
 interface MapScreenProps {
   currentNode: number;
