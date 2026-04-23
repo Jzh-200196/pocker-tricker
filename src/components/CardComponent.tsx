@@ -4,7 +4,7 @@
  */
 
 import React, { memo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Card as CardType } from '../types/card';
 import { cn } from '../lib/utils';
 
@@ -16,7 +16,7 @@ interface CardProps {
   /** 
    * 改动二：新增出牌无效视觉反馈状态
    * isInvalidCombo: 当前选中的牌组是否判定为非法
-   * invalidTriggerCount: 触发无效报警的计数器，用于重置抖动动画
+   * invalidTriggerCount: 触发无效报警的计数器，用于重置并重新触发抖动动画
    */
   isInvalidCombo?: boolean;
   invalidTriggerCount?: number;
@@ -32,17 +32,20 @@ interface CardProps {
   zIndex: number;
 }
 
-/** 震动动画变体 */
+/** 
+ * 震动动画变体 
+ * 核心逻辑：震动过程中必须保持 [y: -20] 的向上位移（如果是选中状态），确保卡牌不掉下去。
+ */
 const shakeVariants = {
   idle: (isSelected: boolean) => ({
-    y: isSelected ? -30 : 0, 
+    y: isSelected ? -20 : 0, 
     x: 0,
     opacity: 1, 
     rotate: 0,
     transition: { type: 'spring', stiffness: 300, damping: 20 }
   }),
   shake: (isSelected: boolean) => ({
-    y: isSelected ? -30 : 0, // 核心逻辑：震动时必须保持原本选中时的向上位移
+    y: isSelected ? -20 : 0, 
     x: [-4, 4, -4, 4, 0],
     transition: { duration: 0.25 }
   })
@@ -56,13 +59,13 @@ const suiteIcons: Record<string, string> = {
 };
 
 /**
- * CardComponent - 高级 Game Feel 重构版
+ * CardComponent - 高级 Game Feel 重构版 (第一步)
  * 
- * 核心提升：
- * 1. 【改动一】：特殊牌标记从右上角移动到左上角 (left: 8px)。
- * 2. 【改动二】：支持 isInvalidCombo 状态，触发血红色警告边框。
- * 3. 【改动二】：使用 invalidTriggerCount 强制重新播放 Shake 动画。
- * 4. 架构保真：100% 保留 .card-element 射线探测机制、静态 Z-Index、pointer-events-none。
+ * 核心优化：
+ * 1. 【改动一】：特殊牌标记位置从右上角调整至左上角 (Left: 8px)。
+ * 2. 【改动二】：集成 isInvalidCombo 状态，触发血红色警告高亮。
+ * 3. 【改动二】：利用 invalidTriggerCount 的 Key 改动机制保证震动动画可重复触发。
+ * 4. 架构保真：保留 0 延迟射线检测所需的 classList 支持、zIndex 与 pointer-events-none。
  */
 export const CardComponent = memo(({ 
   card, 
@@ -128,18 +131,19 @@ export const CardComponent = memo(({
     <motion.div
       layout
       custom={isSelected}
-      // 使用 key 绑定触发计数器，确保动画每次都能在视觉上“重置”并重新播放
+      // 关键：使用 id + triggerCount 作为 key，强制 React 重建该 motion 元素以重新播放动画
       key={`${card.id}-${invalidTriggerCount}`}
       variants={shakeVariants}
       animate={(isShaking || (isSelected && isInvalidCombo)) ? "shake" : "idle"}
       exit={{ y: -500, opacity: 0, scale: 0.5 }}
       onPointerDown={(e) => {
         if (disabled) return;
-        // 射线探测核心优化：释放指针捕获
+        // 射线探测核心：释放指针捕获
         e.currentTarget.releasePointerCapture(e.pointerId);
         onPointerDown?.(card.id, e);
       }}
       draggable={false}
+      // 0 延迟系统所需的元数据
       data-card-id={card.id}
       data-is-card="true"
       style={{ 
@@ -152,25 +156,23 @@ export const CardComponent = memo(({
       className={cn(
         "card-element relative w-[130px] h-[190px] rounded-md border transition-all duration-200 flex-shrink-0 shadow-2xl",
         "bg-[#111] overflow-hidden group touch-none",
-        // 核心视觉逻辑补丁：
-        // 1. 如果选中且 combo 无效 -> 变为血红色警告边框
-        // 2. 否则根据业务：选中(白色)、固定(金色)、默认(深灰色)
+        // 视觉分歧逻辑：
+        // 1. 无效出牌状态 -> 血红色
+        // 2. 正常状态 -> 逻辑高亮
         (isSelected && isInvalidCombo) 
           ? "border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.6)]" 
-          : (isSelected ? "border-white shadow-[0_15px_40px_rgba(0,0,0,0.8)]" : (card.isPinned ? "border-accent-gold shadow-md" : "border-[#333]")),
+          : (isSelected ? "border-white shadow-[0_15px_40px_rgba(0,0,0,0.8)]" : (card.isPinned ? "border-accent-gold" : "border-[#333]")),
         
         isTopmostHovered && "ring-2 ring-white/60 shadow-[0_0_20px_rgba(255,255,255,0.4)]",
         disabled && "opacity-50 cursor-not-allowed",
         isDraggingMode && "cursor-crosshair"
       )}
     >
-      {/* 遮罩屏蔽层：直达 .card-element 节点 */}
       <div className="absolute inset-0 z-[50] pointer-events-none" />
 
-      {/* Card Content Interior - 子元素 pointer-events-none 防止射线检测中断 */}
       <div className="h-full flex flex-col font-mono relative p-1 pointer-events-none">
         
-        {/* 【改动一】：特殊牌标记移动到左上角 (Left-2) */}
+        {/* 【改动一】：特殊牌标记位置调整至左上角 (Top-2 Left-2) */}
         {effectData && (
           <div className="absolute z-30 pointer-events-none" style={{ top: '8px', left: '8px' }}>
              <span className={cn("text-lg drop-shadow-md", effectData.iconColor)}>
@@ -179,7 +181,7 @@ export const CardComponent = memo(({
           </div>
         )}
 
-        {/* 标准点数与花色显示 (仅在非特殊牌或作为背景显示) */}
+        {/* 基准点数与花色显示 (仅非特殊牌) */}
         {card.suite !== 'Special' && (
           <div className="absolute flex flex-col items-center leading-none z-10" style={{ top: '6px', left: '8px' }}>
             <div className={cn(
@@ -194,7 +196,7 @@ export const CardComponent = memo(({
           </div>
         )}
 
-        {/* 核心中央图形 */}
+        {/* 核心中央图形区块 */}
         <div className="flex-grow flex items-center justify-center relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-sm border border-white/5 mt-1">
            <span className={cn(
              "opacity-[0.03] select-none", 
@@ -211,7 +213,7 @@ export const CardComponent = memo(({
              </div>
            )}
 
-           {/* 底部效果面板 (仅特殊牌) */}
+           {/* 底部特殊效果详情 */}
            {effectData && (
              <div className="absolute inset-0 flex flex-col justify-end p-2 pb-4">
                 <div className={cn(
@@ -228,7 +230,7 @@ export const CardComponent = memo(({
            )}
         </div>
 
-        {/* 底部功能反馈元数据 */}
+        {/* 底部元数据栏 */}
         <div className="h-6 flex items-center justify-between px-2">
            <div className="flex items-center gap-1">
               <div className={cn("w-1.5 h-1.5 rounded-full", card.isPinned ? "bg-accent-gold animate-pulse" : "bg-white/10")} />
@@ -242,7 +244,7 @@ export const CardComponent = memo(({
         </div>
       </div>
 
-      {/* 选中时的内边缘发光（如果 Combo 无效则不显示白色内光以突显血红边框，或叠加显示） */}
+      {/* 高亮反馈层 */}
       {isSelected && !isInvalidCombo && (
         <div 
           className="absolute inset-0 border-[3px] border-white pointer-events-none"
@@ -250,7 +252,7 @@ export const CardComponent = memo(({
         />
       )}
       
-      {/* 出牌无效时的血红内部蒙版提示 */}
+      {/* 出牌无效时的血红内蚀刻提示 */}
       {isSelected && isInvalidCombo && (
         <div className="absolute inset-0 border-[3px] border-red-600/50 pointer-events-none bg-red-600/5 animate-pulse" />
       )}

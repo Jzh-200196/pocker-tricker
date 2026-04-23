@@ -17,32 +17,30 @@ interface HandAreaProps {
   isDragging: boolean;
   showInvalidFeedback: boolean;
   isInvalidDeck: boolean;
-  isHandShaking: boolean;
-  hoveredCardId: string | null;
-
-  // 新增：用于出牌错误视觉反馈
   isInvalidCombo?: boolean;
   invalidTriggerCount?: number;
+  isHandShaking: boolean;
+  hoveredCardId: string | null;
 }
 
 /**
  * 优化后的手牌渲染区 - 物理层叠保真版
- * 
- * 1. 静态 Z-Index 策略。
- * 2. 0 延迟交互数据透传。
- * 3. 错误出牌 Shake 状态透传。
+ * 【铁律遵循】：
+ * 1. 静态 Z-Index：zIndex 严格且仅由数组索引 idx 决定。
+ * 2. 绝对禁止动态层级：选中或悬停时不再改变 zIndex，确保物理堆叠顺序恒定。
  */
 export const HandArea = memo(({
   cards,
   selectedCardIds,
   onCardPointerDown,
+  onPointerEnterCard,
   isDragging,
   showInvalidFeedback,
   isInvalidDeck,
-  isHandShaking,
-  hoveredCardId,
   isInvalidCombo,
-  invalidTriggerCount
+  invalidTriggerCount,
+  isHandShaking,
+  hoveredCardId
 }: HandAreaProps) => {
   return (
     <div 
@@ -53,7 +51,7 @@ export const HandArea = memo(({
         {cards.map((card, idx) => {
           const isSelected = selectedCardIds.includes(card.id);
           
-          // 【铁律】：静态层级。左侧索引小，在物理底层。
+          // 【铁律】：静态层级分配。左边的牌永远在下面，右边的牌永远压在上面。
           const zIndex = 10 + idx;
 
           return (
@@ -80,13 +78,12 @@ export const HandArea = memo(({
                 card={card}
                 isSelected={isSelected}
                 isInvalid={showInvalidFeedback && isInvalidDeck && isSelected}
-                isShaking={isHandShaking && isSelected}
                 isInvalidCombo={isInvalidCombo}
                 invalidTriggerCount={invalidTriggerCount}
+                isShaking={isHandShaking && isSelected}
                 isTopmostHovered={hoveredCardId === card.id}
                 isDraggingMode={isDragging}
                 onPointerDown={onCardPointerDown}
-                zIndex={zIndex}
               />
             </motion.div>
           );
